@@ -12,9 +12,9 @@ import api from "@/lib/api"; // <--- FIX 1: Import the secure API helper
 
 interface Campaign {
   id: string;
-  title: string;
-  body: string;
-  image?: string;
+  content_title: string;
+  content_body: string;
+  image_url?: string;
 }
 
 interface Beacon {
@@ -52,9 +52,9 @@ const CampaignEdit = () => {
       if (currentCampaign) {
         setCampaign(currentCampaign);
         setFormData({
-          title: currentCampaign.title,
-          body: currentCampaign.body,
-          image: currentCampaign.image || "",
+          title: currentCampaign.content_title,
+          body: currentCampaign.content_body,
+          image: currentCampaign.image_url || "",
         });
         // If your API returns linked beacons, you would set selectedBeacons here
       } else {
@@ -97,8 +97,11 @@ const CampaignEdit = () => {
       // FIX 4: Actually send the update to the server
       // We send the form data AND the selected beacons (triggers)
       const payload = {
-        ...formData,
-        beacon_ids: selectedBeacons 
+        name: formData.title,
+        content_title: formData.title,
+        content_body: formData.body,
+        image_url: formData.image,
+        beacon_ids: selectedBeacons // We send the list of selected triggers
       };
 
       // Assuming your API supports PUT for updates

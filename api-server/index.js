@@ -191,6 +191,25 @@ app.get('/api/v1/beacons', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * (GET) /api/v1/campaigns (Web App)
+ * Lists all campaigns for the CMS.
+ */
+app.get('/api/v1/campaigns', authenticateToken, async (req, res) => {
+  const { organization_id } = req.user;
+  try {
+    // FIX: Order by 'name' instead
+    const result = await pool.query(
+      'SELECT * FROM campaigns WHERE organization_id = $1 ORDER BY name ASC',
+      [organization_id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Campaign CMS ---
 
 app.post('/api/v1/campaigns', authenticateToken, async (req, res) => {
@@ -229,6 +248,52 @@ app.post('/api/v1/triggers', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * (PUT) /api/v1/campaigns/:id
+ * Updates campaign details and links triggers.
+ */
+app.put('/api/v1/campaigns/:id', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { name, content_title, content_body, image_url, beacon_ids } = req.body;
+  const { organization_id } = req.user;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // 1. Update Campaign Details
+    const updateQuery = `
+      UPDATE campaigns 
+      SET name = $1, content_title = $2, content_body = $3, image_url = $4
+      WHERE id = $5 AND organization_id = $6
+    `;
+    await client.query(updateQuery, [name, content_title, content_body, image_url, id, organization_id]);
+
+    // 2. Update Triggers (If beacon_ids provided)
+    if (beacon_ids && Array.isArray(beacon_ids)) {
+      // First, remove ALL old triggers for this campaign
+      await client.query('DELETE FROM triggers WHERE campaign_id = $1', [id]);
+
+      // Then, insert new triggers
+      for (const beaconId of beacon_ids) {
+        await client.query(
+          'INSERT INTO triggers (campaign_id, beacon_id, trigger_event_type) VALUES ($1, $2, $3)',
+          [id, beaconId, 'enter_region']
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: "Updated successfully" });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
   }
 });
 
